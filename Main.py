@@ -91,6 +91,18 @@ def main():
             bot.set_email(title=title, content=content)
             bot.send_email()
             send_to_members(title=title, content=mem_content)
+        elif len(lesson) < len(total_lesson):
+            diff = [item for item in total_lesson if item not in lesson]
+            total_lesson = lesson
+            title, content, mem_content = u'【期末】有成绩被撤回了！', u'', u'课程名：'
+            for item in diff:
+                content += u'课程名：%s，学分：%s，绩点：%s，成绩：%s.\n' %\
+                           (item['lesson_name'], item['credit'], item['point'], item['score'])
+                mem_content += u'%s、' % item['lesson_name']
+            mem_content = mem_content.rstrip(u'、') + u'\n以上课程成绩被老师撤回了！'
+            bot.set_email(title=title, content=content)
+            bot.send_email()
+            send_to_members(title=title, content=mem_content)
         else:
             pass
     except Exception as e:
