@@ -8,6 +8,7 @@ from email.header import Header
 from school_api import SchoolClient
 from retry import retry
 from apscheduler.schedulers.blocking import BlockingScheduler
+from apscheduler.events import EVENT_JOB_ERROR
 from configparser import ConfigParser
 
 
@@ -50,7 +51,6 @@ SMTP_SERVER = config['DEFAULT']['SMTP_SERVER']
 SEC_INTERVAL = config['DEFAULT']['SEC_INTERVAL']
 MEMBERS = list(map(str.strip, config['GROUP']['MEMBERS'].split(',')))
 
-
 logging.basicConfig(level=logging.DEBUG,
                     format='%(asctime)s-%(name)s-%(levelname)s: %(message)s',
                     datefmt='%Y-%m-%d %H:%M:%S',
@@ -71,6 +71,12 @@ def send_to_members(title, content):
         member_bot.send_email()
 
 
+def err_listener(ev):
+    err_title, err_content = u'【期末】程序异常！', str(ev.exception) + '\n' + str(ev.traceback)
+    bot.set_email(title=err_title, content=err_content)
+    bot.send_email()
+
+
 @retry(Exception, tries=10, delay=5, backoff=2, max_delay=60)
 def main():
     global school, user, total_lesson
@@ -84,7 +90,7 @@ def main():
             total_lesson = lesson
             title, content, mem_content = u'【期末】出新的成绩了！', u'', u'课程名：'
             for item in diff:
-                content += u'课程名：%s，学分：%s，绩点：%s，成绩：%s.\n' %\
+                content += u'课程名：%s，学分：%s，绩点：%s，成绩：%s.\n' % \
                            (item['lesson_name'], item['credit'], item['point'], item['score'])
                 mem_content += u'%s、' % item['lesson_name']
             mem_content = mem_content.rstrip(u'、') + u'\n已经出分了，快去查看吧！'
@@ -96,7 +102,7 @@ def main():
             total_lesson = lesson
             title, content, mem_content = u'【期末】有成绩被撤回了！', u'', u'课程名：'
             for item in diff:
-                content += u'课程名：%s，学分：%s，绩点：%s，成绩：%s.\n' %\
+                content += u'课程名：%s，学分：%s，绩点：%s，成绩：%s.\n' % \
                            (item['lesson_name'], item['credit'], item['point'], item['score'])
                 mem_content += u'%s、' % item['lesson_name']
             mem_content = mem_content.rstrip(u'、') + u'\n以上课程成绩被老师撤回了！'
@@ -115,11 +121,8 @@ def main():
 if __name__ == '__main__':
     scheduler = BlockingScheduler()
     scheduler.add_job(main, 'interval', seconds=int(SEC_INTERVAL))
+    scheduler.add_listener(err_listener, EVENT_JOB_ERROR)
     try:
         scheduler.start()
     except (KeyboardInterrupt, SystemExit):
         pass
-    except Exception as e:
-        err_title, err_content = u'【期末】程序异常！', str(e)
-        bot.set_email(title=err_title, content=err_content)
-        bot.send_email()
